@@ -91,33 +91,79 @@ class BaseTTS:
 
 ###########################################################################################
 class EdgeTTS(BaseTTS):
-    def txt_to_audio(self,msg):
-        voicename = self.opt.REF_FILE #"zh-CN-YunxiaNeural"
-        text,textevent = msg
-        t = time.time()
-        asyncio.new_event_loop().run_until_complete(self.__main(voicename,text))
-        logger.info(f'-------edge tts time:{time.time()-t:.4f}s')
-        if self.input_stream.getbuffer().nbytes<=0: #edgetts err
-            logger.error('edgetts err!!!!!')
-            return
+    # def txt_to_audio(self,msg):
+    #     voicename = self.opt.REF_FILE #"zh-CN-YunxiaNeural"
+    #     text,textevent = msg
+    #     t = time.time()
+    #     asyncio.new_event_loop().run_until_complete(self.__main(voicename,text))
+    #     logger.info(f'-------edge tts time:{time.time()-t:.4f}s')
+    #     if self.input_stream.getbuffer().nbytes<=0: #edgetts err
+    #         logger.error('edgetts err!!!!!')
+    #         return
         
-        self.input_stream.seek(0)
-        stream = self.__create_bytes_stream(self.input_stream)
+    #     self.input_stream.seek(0)
+    #     stream = self.__create_bytes_stream(self.input_stream)
+    #     streamlen = stream.shape[0]
+    #     idx=0
+    #     while streamlen >= self.chunk and self.state==State.RUNNING:
+    #         eventpoint=None
+    #         streamlen -= self.chunk
+    #         if idx==0:
+    #             eventpoint={'status':'start','text':text,'msgevent':textevent}
+    #         elif streamlen<self.chunk:
+    #             eventpoint={'status':'end','text':text,'msgevent':textevent}
+    #         self.parent.put_audio_frame(stream[idx:idx+self.chunk],eventpoint)
+    #         idx += self.chunk
+    #     #if streamlen>0:  #skip last frame(not 20ms)
+    #     #    self.queue.put(stream[idx:])
+    #     self.input_stream.seek(0)
+    #     self.input_stream.truncate() 
+
+    def txt_to_audio(self, msg):
+        text, textevent = msg
+        
+        # Path to your hardcoded audio file (must be compatible: e.g., WAV, 16kHz or resample)
+        audio_path = 'sample_audio.mp3'
+
+        # Read the audio file
+        stream, sample_rate = sf.read(audio_path)  # numpy array and sample rate
+        
+        # Convert to float32 if needed
+        if stream.dtype != np.float32:
+            stream = stream.astype(np.float32)
+            if stream.dtype == np.int16:
+                stream /= 32767  # normalize int16 to float32
+
+        # If stereo, use only first channel
+        if stream.ndim > 1:
+            stream = stream[:, 0]
+
+        # Resample if needed to match expected sample_rate (self.sample_rate)
+        if sample_rate != self.sample_rate:
+            import resampy
+            stream = resampy.resample(stream, sample_rate, self.sample_rate)
+
         streamlen = stream.shape[0]
-        idx=0
-        while streamlen >= self.chunk and self.state==State.RUNNING:
-            eventpoint=None
+        idx = 0
+
+        event_sent = False
+        while streamlen >= self.chunk and self.state == State.RUNNING:
+            eventpoint = None
+            if not event_sent:
+                eventpoint = {'status': 'start', 'text': text, 'msgenvent': textevent}
+                event_sent = True
+            elif streamlen < self.chunk:
+                eventpoint = {'status': 'end', 'text': text, 'msgenvent': textevent}
+
+            self.parent.put_audio_frame(stream[idx:idx + self.chunk], eventpoint)
             streamlen -= self.chunk
-            if idx==0:
-                eventpoint={'status':'start','text':text,'msgevent':textevent}
-            elif streamlen<self.chunk:
-                eventpoint={'status':'end','text':text,'msgevent':textevent}
-            self.parent.put_audio_frame(stream[idx:idx+self.chunk],eventpoint)
             idx += self.chunk
-        #if streamlen>0:  #skip last frame(not 20ms)
-        #    self.queue.put(stream[idx:])
-        self.input_stream.seek(0)
-        self.input_stream.truncate() 
+
+        # Send trailing silence to cleanly end
+        self.parent.put_audio_frame(np.zeros(self.chunk, dtype=np.float32), {
+            'status': 'end', 'text': text, 'msgenvent': textevent
+        })
+
 
     def __create_bytes_stream(self,byte_stream):
         #byte_stream=BytesIO(buffer)
