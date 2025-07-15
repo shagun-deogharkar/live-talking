@@ -139,7 +139,7 @@
 # --------------------------------------------------------------------------------------------
 
 # Use base CUDA image
-ARG BASE_IMAGE=nvcr.io/nvidia/cuda:11.6.1-cudnn8-devel-ubuntu20.04
+ARG BASE_IMAGE=nvcr.io/nvidia/cuda:11.4.2-cudnn8-devel-ubuntu20.04
 FROM $BASE_IMAGE
 
 # Install system dependencies (includes libgl1 for OpenCV)
@@ -165,7 +165,8 @@ COPY requirements.txt ./
 # Install Python + Conda + PIP dependencies
 RUN /bin/bash -c "source ~/miniconda3/bin/activate nerfstream && \
     pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
-    conda install -y pytorch==1.12.1 torchvision==0.13.1 cudatoolkit=11.3 -c pytorch && \
+    pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 \
+        -f https://download.pytorch.org/whl/torch_stable.html && \
     pip install -r requirements.txt && \
     pip install 'git+https://github.com/facebookresearch/pytorch3d.git' && \
     pip install tensorflow-gpu==2.8.0 && \
