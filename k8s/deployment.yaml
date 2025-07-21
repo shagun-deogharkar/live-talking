@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: live-talking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: live-talking
+  template:
+    metadata:
+      labels:
+        app: live-talking
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: live-talking
+          image: >-
+            asia-southeast1-docker.pkg.dev/mystic-song-410112/lipsync-poc-images/lipsync_image:latest
+          command:
+            - /bin/bash
+            - "-c"
+          args:
+            - >
+              /root/miniconda3/envs/nerfstream/bin/python app.py --transport
+              webrtc --model wav2lip --avatar_id lipsync_shruti &&  tail -f
+              /dev/null
+          ports:
+            - containerPort: 8010
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+              nvidia.com/gpu: 1
+            limits:
+              cpu: "3"
+              memory: 12Gi
+              nvidia.com/gpu: 1
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: present
+          effect: NoSchedule
